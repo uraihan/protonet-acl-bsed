@@ -1,0 +1,4 @@
+# Make sure that this folder remains empty
+*
+# But not this gitignore file
+!.gitignore
