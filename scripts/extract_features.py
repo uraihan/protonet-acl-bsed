@@ -4,6 +4,7 @@ import os
 import numpy as np
 # import pandas as pd
 import h5py
+import gc
 from . import utils
 
 
@@ -110,6 +111,7 @@ class FeatureExtractor:
                         assert (f[feat].dtype == result[feat].dtype)
 
                 print(f"File {audio_path} is successfully processed!")
+                gc.collect()
 
                 # for feat in result.keys():
                 #     np_path = file.replace(".wav", f"_{feat}.npy")
