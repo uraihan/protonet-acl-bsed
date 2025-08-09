@@ -1,97 +1,66 @@
-import torch.nn as nn
 import torch
+import numpy as np
 import torch.nn.functional as F
+import torch.nn as nn
 
 
-def conv3x3(in_channels, out_channels, kernel_size=3, padding=1, stride=1, bias=False):
-    return nn.Conv2d(in_channels, out_channels, kernel_size, stride,
-                     padding, bias=bias)
+class ProtoNet(torch.nn.Module):
+    def __init__(self,
+                 encoder,
+                 num_prototypes: int,
+                 embedding_dim: int,
+                 prototypes=None,
+                 squared: bool = True,
+                 dist: str = "euclidean",
+                 normalize: bool = False,
+                 device: str = "cuda"):
+        """
+        Prototypical Network layer. Insert with feature embedding after encoder.
 
+        Args:
+            model (nn.Module): feature extracting network
+            n_prototypes (int): number of prototypes to use
+            embedding_dim (int): dimension of the embedding space
+            prototypes (tensor): Prototype tensor of shape (n_prototypes x embedding_dim),
+            squared (bool): Whether to use the squared Euclidean distance or not
+            dist (str): default 'euclidean', other possibility 'cosine'
+            normalize (bool): l2 normalization of the features
+            device (str): device on which to declare the prototypes (cpu/cuda)
+        """
+        super(ProtoNet, self).__init__()
+        self.encoder = encoder
+        self.num_prototypes = num_prototypes
+        self.squared = squared
+        self.dist = dist
+        self.normalize = normalize
+        self.prototypes = (nn.Parameter(torch.rand((num_prototypes, embedding_dim), device=device)).requires_grad_(True)
+                           if prototypes is None else nn.Parameter(prototypes).requires_grad_(False))
 
-class BasicBlock(nn.Module):
-    expansion = 1
+    def forward(self, data):
+        embedding = self.encoder(data)
 
-    def __init__(self, in_channels, out_channels, stride=1,
-                 downsample=None):
-        super(BasicBlock, self).__init__()
-        self.conv1 = conv3x3(in_channels, out_channels)
-        self.bn1 = nn.BatchNorm2d(out_channels)
-        self.relu = nn.ReLU(0.1)
+        if self.normalize:
+            embedding = F.normalize(embedding, dim=1)
 
-        self.conv2 = conv3x3(out_channels, out_channels)
-        self.bn2 = nn.BatchNorm2d(out_channels)
+        batch, channel, height, width = embedding.shape
+        embedding = embedding.view(batch, channel, height*width) \
+                             .transpose(1, 2) \
+                             .contiguous() \
+                             .view(batch*height*width, channel)
 
-        self.conv3 = conv3x3(out_channels, out_channels)
-        self.bn3 = nn.BatchNorm2d(out_channels)
+        if self.dist == "euclidean":
+            dist = torch.norm(embedding[:, None, :] -
+                              self.prototypes[None, :, :], dim=-1)
+        if self.dist == "cosine":
+            dist = 1 - nn.CosineSimilarity(dim=-1)(embedding[:, None, :],
+                                                   self.prototypes[None, :, :])
 
-        self.maxpool = nn.MaxPool2d(stride)
-        self.downsample = downsample
-        self.stride = stride
+        if self.squared:
+            dist = dist ** 2
 
-    def forward(self, x):
-        residual = x
-        out = self.conv1(x)
-        out = self.bn1(out)
-        out = self.relu(out)
+        dist = dist.view(batch, height * width, self.n_prototypes) \
+                   .transpose(1, 2) \
+                   .contiguous() \
+                   .view(batch, self.n_prototypes, height, width)
 
-        out = self.conv2(out)
-        out = self.bn2(out)
-        out = self.relu(out)
-
-        out = self.conv3(out)
-        out = self.bn3(out)
-
-        if self.downsample is not None:
-            residual = self.downsample(x)
-
-        out += residual
-        out = self.relu(out)
-        out = self.maxpool(out)
-        out = F.dropout(out, p=self.drop_rate, training=self.training,
-                        inplace=True)  # TODO: Find out if we need this
-        return out
-
-
-# TODO: Fix this
-class ResNet(nn.Module):
-    def __init__(self, block=BasicBlock, avg_pool=True, dropblock_size=5):
-        super(ResNet, self).__init__()
-
-        self.in_channels = 1
-        self.layer1 = self._make_layer(block, 64, stride=2)
-        self.layer2 = self._make_layer(block, 128, stride=2)
-        self.layer3 = self._make_layer(block, 64, stride=2, drop_block=True,
-                                       block_size=dropblock_size)
-
-        # TODO: Eliminate these magic numbers
-        self.adaptive_avg_pool = nn.AdaptiveAvgPool2d((4, int(2048/4*64)))
-
-        self.adaptive_max_pool = nn.AdaptiveMaxPool2d((4, int(2048/4*64)))
-
-    def _make_layer(self, block, out_channels, stride=1, drop_block=False,
-                    block_size=1, features=None):
-        downsample = None
-        if stride != 1 or self.in_channels != out_channels * block.expansion:
-            downsample = nn.Sequential(
-                nn.Conv2d(self.in_channels, out_channels * block.expansion,
-                          kernel_size=1, stride=1, bias=False),
-                nn.BatchNorm2d(out_channels * block.expansion)
-            )
-
-        layers = []
-        layers.append(block(
-            self.in_channels, out_channels, stride, downsample
-        ))
-
-        self.in_channels = out_channels * block.expansion
-        return nn.Sequential(*layers)
-
-    def forward(self, x):
-        num_samples, seq_len, mel_bins = x.shape
-        x = x.view(-1, 1, seq_len, mel_bins)
-        x = self.layer1(x)
-        x = self.layer2(x)
-        x = self.layer3(x)
-        x = self.adaptive_avg_pool(x)
-
-        return x.view(x.size(0), -1)
+        return -dist
