@@ -1,5 +1,7 @@
 import yaml
 from collections import namedtuple
+import glob
+import os
 
 
 # class YamlStruct:
@@ -34,3 +36,22 @@ def dict_to_namedtuple(name, content):
             result[key] = value
 
     return namedtuple(name, result.keys())(**result)
+
+
+def get_all_csv(dataset_path):
+    """
+    Get all CSV files in the dataset.
+
+    Args:
+        dataset_path: Path of the Development_Set directory.
+
+    Returns:
+        csv_files: List of paths to CSV metadata files.
+    """
+    try:
+        dataset_path = os.path.join(dataset_path, "Training_Set/*/*.csv")
+        # return [f for f in glob.glob(f"{dataset_path}/Training_Set/*/*.csv")]
+        return [f for f in glob.glob(dataset_path)]
+    except Exception as e:
+        print(
+            f"Error encountered when accessing dataset directory. Error: {e}")
