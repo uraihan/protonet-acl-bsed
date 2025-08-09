@@ -1,5 +1,5 @@
 dataset:
-  devset: "./dataset/Development_Set"
+  devset: "dataset/Development_Set"
 
 params:
   sr: 22050
@@ -8,3 +8,15 @@ params:
   n_mels: 128
   fmax: 11025
   segment_len: 0.2
+
+features: ["logmel", "pcen", "melspec"]
+
+train_params:
+    n_ways: 10
+    k_shots: 5
+    optimizer: "Adam"
+    lr: 0.001
+    weight_decay: 0.1
+    epoch: 50
+    margin: 0.4
+    alpha: 0.5
