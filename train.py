@@ -16,8 +16,9 @@ def check_training_samples(dataset_path):
         print(
             "Development dataset folder can not be found\nNow retrieving .zip file from the web")
         os.system(
-            "wget https://zenodo.org/record/6482837/files/Development_Set.zip?download=1")
-        os.system(f"unzip {dataset_path}")
+            """wget https://zenodo.org/record/6482837/files/Development_Set.zip
+            -P ./dataset""")
+        os.system(f"cd dataset && unzip {dataset_path}.zip")
 
 
 def get_unextracted_files(dataset_path):
