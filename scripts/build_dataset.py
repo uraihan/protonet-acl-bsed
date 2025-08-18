@@ -3,13 +3,14 @@ import pandas as pd
 import numpy as np
 import h5py
 from . import utils
+from collections import defaultdict
 # import utils  # FOR DEBUGGING ONLY (REMOVE AFTER DONE)
 # from pathlib import Path
 # import os
 
 
 class DataSampler:
-    def __init__(self, dataset_path, config, feature):
+    def __init__(self, dataset_path, config, feature, is_single=False):
         self.dataset_path = dataset_path
         self.config = config
         self.sr = config.params.sr
@@ -17,9 +18,13 @@ class DataSampler:
         self.fps = self.sr / self.hop_len
         self.seg_len = int(config.params.segment_len * self.fps)
         self.feature = feature
+        self.is_single = is_single
 
         # self.csv_files = self.get_all_csv(self.dataset_path)
-        self.csv_files = utils.get_all_csv(self.dataset_path)
+        if self.is_single and ("csv" in dataset_path):
+            self.csv_files = [self.dataset_path]
+        else:
+            self.csv_files = utils.get_all_csv(self.dataset_path)
 
     # GET ALL CORRESPONDING CSV FILES IN TRAINING SET
     # def get_all_csv(self, dataset_path):
@@ -46,7 +51,7 @@ class DataSampler:
     def map_label_toint(self, label_list):
         unique_label, label_int = np.unique(label_list, return_inverse=True)
 
-        return label_int
+        return unique_label, label_int
 
     # GET START AND END TIME WITH ONSET/OFFSET
     def get_time(self, df):
@@ -82,18 +87,24 @@ class DataSampler:
             start = 0
 
         total_duration = end - start
+        samples = []
+
         if total_duration < seg_len:
             y = feature[..., start:end]
             tile_times = np.ceil(seg_len / total_duration)
             y = np.tile(y, (1, int(tile_times)))
             y = y[..., :seg_len]
+            samples.append(y)
         else:
-            rng = np.random.default_rng()
-            randomize = rng.uniform(low=start, high=end - seg_len)
-            randomize = int(randomize)
-            # randomize = np.random.uniform(low=start, high=end -
-            # seg_len)
-            y = feature[..., randomize: randomize + seg_len]
+            while end - start >= seg_len:
+                # rng = np.random.default_rng()
+                # randomize = rng.uniform(low=start, high=end - seg_len)
+                # randomize = int(randomize)
+                # y = feature[..., randomize: randomize + seg_len]
+
+                y = feature[..., start: start + seg_len]
+                start += seg_len
+                samples.append(y)
 
         # if y.shape[1] != seg_len:
             # print(f"Shape error! Padding. Original shape: {y.shape}, segment length: {seg_len}, starttime: {
@@ -103,12 +114,13 @@ class DataSampler:
             # y = np.tile(y, (y.shape[0], y.shape[1]))
             # print(y.shape)
 
-        return y
+        return np.array(samples)
 
     # MAIN SAMPLING FUNCTION
     def sample_data(self):
-        x = []
-        y = []
+        # x = []
+        # y = []
+        dataset = defaultdict()
         for file in self.csv_files:
             # collecting metadata
             df_pos = self.get_pos_df(file)
@@ -126,60 +138,64 @@ class DataSampler:
                                                        self.seg_len)
                     if sampled_data.shape[1] == 15:
                         print(f"Shape 15 on file {feature_path}")
-                    x.append(sampled_data)
-                    y.append(label)
+                    # x.append(sampled_data)
+                    # y.append(label)
+                    # print(label, sampled_data.shape)
+                    if label in dataset.keys():
+                        dataset[label] = np.vstack(
+                            (dataset[label], sampled_data))
+                    else:
+                        dataset[label] = sampled_data
 
-        x = np.array(x)
-        y = self.map_label_toint(y)
+        # dataset.keys()
 
+        # x = np.array(x)
+        # y = self.map_label_toint(y)
+        x = []
+        y = []
+
+        for label, feat in dataset.items():
+            if len(x) == 0:
+                x = dataset[label]
+            else:
+                x = np.vstack((x, dataset[label]))
+
+            y.extend([label] * dataset[label].shape[0])
+
+        # if not self.is_single:
+        # y = np.array(y, dtype="str_")
+        unique_labels, y = self.map_label_toint(y)
         with h5py.File(
                 f"{self.dataset_path}/Training_Set/train_{self.feature}.h5", 'w') as f:
             # print(f"feature shape: {len(x)}, label shape: {len(y)}")
             # print(f"x: {x} \ny: {y}")
             f.create_dataset('feature', data=x)
-            f.create_dataset('label', data=y, dtype='int64')
-            # print(f"File {f} was successfully created!")
+            f.create_dataset('label', data=y)
+            f.create_dataset('unique_labels', data=unique_labels)
+            # for label in dataset.keys():
+            #     # TODO: Test the file size of these two options
+            #     # group = f.create_group(label)
+            #     # group.create_dataset('feature', data=dataset[label])
+            #
+            #     # this one is slightly smaller
+            #     f.create_dataset(label, data=dataset[label])
+        print(f"File {f} was successfully created!")
 
-    # def build_metadata(self):
-    #     # content of the sample data files:
-    #     # one train.h5 file, inside is a bunch of dataset for each sampled feature
-    #     # OR: several train.h5 file for each feature, inside is a bunch of sampled
-    #     # data only for that feature
-    #
-    #     for file in self.csv_files:
-    #         metadata = {}
-    #         df_pos = self.get_pos_df(file)
-    #         start_time, end_time = self.get_time(df_pos)
-    #         label_list = self.build_label_list(file, df_pos, start_time)
-    #         audio_file = file.replace("csv", "wav")
-    #         feature_file = file.replace("csv", "h5")
-    #
-    #         with h5py.File(feature_file, 'r') as f:
-    #             for start, end, label in zip(start_time, end_time, label_list):
-    #                 if label not in metadata.keys():
-    #                     metadata[label]["file"] = []
-    #                     metadata[label]["duration"] = []
-    #                     metadata[label]["onset_offset"] = []
-    #                     metadata[label]["sample"] = []
-    #
-    #                 metadata[label]["file"].append(audio_file)
-    #                 metadata[label]["duration"].append(end - start)
-    #                 metadata[label]["onset_offset"].append((start, end))
-    #
-    #                 x = f[self.feature]
-    #                 sampled_data = self.select_segment(
-    #                     start, end, x, self.seg_len)
-    #
-    #             with h5py.File('../dataset/Development_Set/train.h5', 'w') as f:
-    #                 f.create_dataset()
+        # with h5py.File(self.dataset_path.replace(".csv", "test2.h5"), 'r') as f:
+        #     feat = np.array(f['feature'])
+        #     lbl = np.array(f['label'])
+        #     print("halt")
 
 
-def run(config, dataset_path):
+def run(config, dataset_path, return_object=False):
     feature_list = config.features
     for feature in feature_list:
         print(f"Processing samples for feature {feature}...")
         data_sampler = DataSampler(dataset_path, config, feature)
         data_sampler.sample_data()
+
+    if return_object:
+        return data_sampler
 
 
 # WARN: for debugging purpose only

@@ -8,6 +8,7 @@ from model import encoder, protonet, loss
 from torchinfo import summary
 import os
 import torch
+import numpy as np
 
 
 def check_training_samples(dataset_path):
@@ -102,6 +103,7 @@ def main():
     # - Create dataset class from bundled HDF5 file
     trainset = ProtoDataset('melspec', config)
     labels = torch.Tensor(trainset.label)
+    unique_labels = np.array(trainset.unique_labels)
     n_ways = config.train_params.n_ways
     k_shots = config.train_params.k_shots
     trainloader = DataLoader(trainset, batch_sampler=FewShotSampler(labels,
