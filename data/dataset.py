@@ -1,20 +1,32 @@
 import os
 import h5py
-import numpy as np
 from torch.utils.data import Dataset
-from pathlib import Path
-from collections import defaultdict
-from scripts import utils
+# from pathlib import Path
+# from collections import defaultdict
+# from scripts import utils
 
 
 class ProtoDataset(Dataset):
-    def __init__(self, feature, config):
+    def __init__(self, dataset_path, feature: str, config):
+        """
+        Dataset object
+
+        Params:
+            dataset_path (str | Path): Path to dataset. Point this to either the
+                Training Set or Validation Set.
+            feature (str): Audio feature to be used for training/validation.
+            config: config.yaml object.
+        """
+
+        assert (feature in ["pcen", "melspec", "logmel"],
+                "Invalid feature. Must be either 'pcen', 'melspec', or 'logmel'")
         self.feature = feature
-        self.train_set = os.path.join(Path.cwd(),
-                                      config.dataset.devset,
-                                      f"Training_Set/train_{feature}.h5")
-        self.labels = h5py.File(self.train_set, 'r')['labels']
-        self.unique_labels = h5py.File(self.train_set, 'r')['unique_labels']
+        self.train_set = os.path.join(dataset_path,
+                                      f"train_{feature}.h5")
+        self.unique_labels, self.labels = self.get_labels()
+        self.unique_labels = [label.decode() for label in self.unique_labels]
+
+        # dict approach
         # self.label = list(h5py.File(self.train_set, 'r').keys())
         # self.label, self.label_map = utils.map_label_toint(self.label)
 
@@ -33,3 +45,9 @@ class ProtoDataset(Dataset):
             #                                              'r').get(label))
 
         return self.dataset[idx], self.labels[idx]
+
+    def get_labels(self):
+        labels = list(h5py.File(self.train_set, 'r')['labels'])
+        unique_labels = list(h5py.File(self.train_set,
+                                       'r')['unique_labels'])
+        return unique_labels, labels

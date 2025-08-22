@@ -80,8 +80,11 @@ def fit(protonet, optimizer, trainloader, loss_fn):
 
 def main():
     config_path = os.path.join(Path.cwd(), "config.yaml")
-    dataset_path = os.path.join(Path.cwd(), "dataset/Development_Set")
     config = utils.open_yaml_namedtuple(config_path)
+
+    dataset_path = os.path.join(Path.cwd(), config.dataset)
+    trainset_path = os.path.join(dataset_path, "Training_Set")
+    valset_path = os.path.join(dataset_path, "Validation_Set")
 
     # NOTE: Training pipeline:
     # - Extract features if features has not yet extracted from training samples
@@ -93,17 +96,17 @@ def main():
                                           unextracted_files)
         feat_extractor.get_features()
 
+    print("All features were extracted!")
     # - Sample features based on CSV metadata and bundle them into HDF5 files
     features = config.features
     for feat in features:
-        if not os.path.exists(os.path.join(dataset_path,
-                              f"Training_Set/train_{feat}.h5")):
+        if not os.path.exists(os.path.join(trainset_path,
+                              f"train_{feat}.h5")):
             build_dataset.run(config, dataset_path)
 
     # - Create dataset class from bundled HDF5 file
-    trainset = ProtoDataset('melspec', config)
-    labels = torch.Tensor(trainset.label)
-    unique_labels = np.array(trainset.unique_labels)
+    trainset = ProtoDataset(trainset_path, 'melspec', config)
+    labels = trainset.labels
     n_ways = config.train_params.n_ways
     k_shots = config.train_params.k_shots
 

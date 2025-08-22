@@ -2,6 +2,7 @@ import yaml
 from collections import namedtuple
 import glob
 import os
+from collections import defaultdict
 
 
 # class YamlStruct:
@@ -18,6 +19,26 @@ import os
 #         content_dict = yaml.safe_load(f)
 #
 #     return YamlStruct(**content_dict)
+
+def map_label_toint(label_list):
+    """
+    Convert a list of string labels to list of int labels.
+
+    Params:
+        label_list (List[str]): List of label to be converted
+
+    Returns:
+        label_int (List[int]): List of label with integer data type
+        label_map (dict(str)): Dictionary relationship between numerals and its
+            corresponding label
+    """
+    label_map = defaultdict()
+    label_int = []
+    for idx, label in enumerate(label_list):
+        label_map[idx] = label
+        label_int.append(idx)
+
+    return (label_int, label_map)
 
 
 def open_yaml_namedtuple(filepath):
