@@ -87,14 +87,14 @@ class ResNet(nn.Module):
         self.in_channels = out_channels * block.expansion
         return nn.Sequential(*layers)
 
-    def forward(self, x):
-        num_samples, seq_len, mel_bins = x.shape
-        x = x.view(-1, 1, seq_len, mel_bins)
-        x = self.layer1(x)
+    def forward(self, data):
+        # num_samples, seq_len, mel_bins = x.shape
+        # x = x.view(-1, 1, seq_len, mel_bins)
+        x = self.layer1(data)
         x = self.layer2(x)
         x = self.layer3(x)
         x = self.adaptive_avg_pool(x)
 
         # TODO: decide which one is the most appropriate out of these two return
         # return x.view(x.size(0), -1)
-        return x
+        return x.view(*data.shape[:2], -1)
