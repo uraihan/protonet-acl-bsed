@@ -116,7 +116,7 @@ def main():
                              collate_fn=batch_sampler.collate_fn)
     # - Pass batch through resnet model
     model = encoder.ResNet()
-    proto_net = protonet.ProtoNet(model, 1, 2096, device="cpu")
+    proto_net = protonet.ProtoNet(model, 1, n_ways, k_shots, device="cpu")
     # using cpu for debugging. replace with cuda later
     optimizer = torch.optim.Adam(model.parameters(), lr=config.train_params.lr,
                                  weight_decay=config.train_params.weight_decay)
