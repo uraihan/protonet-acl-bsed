@@ -25,18 +25,28 @@ class AngularContrastiveLoss(nn.Module):
             self.alpha = alpha
 
     def forward(self, features, labels, projection1=None, projection2=None):
+        if len(features.shape) >= 3:
+            features = features.squeeze(1)
+
         if not self.enableCL:
             return self.amc(self.device, features, labels, self.margin)
         else:
             # assert (projection1 is not None and projection2 is not None), \
             #     "You haven't provided feature projection for calculating the normal Contrastive Loss component."
 
+            batch_size = features.size(0)
+            n_ways = features.size(1)
+            k_shot = int(batch_size / n_ways)
+            onehot_labels = torch.eye(
+                n_ways, n_ways).repeat_interleave(k_shot, dim=0).to(self.device)
+
             scl_loss = nn.CrossEntropyLoss().to(self.device)
-            loss1 = scl_loss(features, labels)
-            loss2 = self.amc(self.device, features, labels, self.margin)
+            loss1 = scl_loss(features, onehot_labels)
+            loss2 = self.amc(features, labels, self.margin)
+
             return loss1 * self.alpha + (1 - self.alpha) * loss2
 
-    def amc(device, features, labels, margin):
+    def amc(self, features, labels, margin):
         if features.shape > 2:
             features = features.view(features.shape[0], -1)
         features = F.normalize(features, dim=1)
@@ -46,7 +56,8 @@ class AngularContrastiveLoss(nn.Module):
         similarity_matrix = torch.matmul(features, features.T)
 
         # discard the main diagonal from both: labels and similarities matrix
-        diag_mask = torch.eye(label_mask.shape[0], dtype=torch.bool).to(device)
+        diag_mask = torch.eye(
+            label_mask.shape[0], dtype=torch.bool).to(self.device)
         label_mask = label_mask[~diag_mask].view(label_mask.shape[0], -1)
         similarity_matrix = similarity_matrix[~diag_mask].view(
             similarity_matrix.shape[0], -1
@@ -62,7 +73,7 @@ class AngularContrastiveLoss(nn.Module):
         m = margin
         negatives = torch.clamp(negatives, min=-1 + 1e-7, max=1 - 1e-7)
         clip = torch.acos(negatives)
-        l1 = torch.max(torch.zeros(clip.shape[0]).to(device), (m - clip))
+        l1 = torch.max(torch.zeros(clip.shape[0]).to(self.device), (m - clip))
         l1 = torch.sum(l1**2)
 
         # if S_ij = 1
@@ -75,7 +86,7 @@ class AngularContrastiveLoss(nn.Module):
         return loss
 
     ## LEGACY ##
-    def scl(projection1, projection2, labels, temperature, device):
+    def _scl(projection1, projection2, labels, temperature, device):
         projection1, projection2 = F.normalize(
             projection1), F.normalize(projection2)
         features = torch.cat(

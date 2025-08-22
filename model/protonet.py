@@ -24,11 +24,16 @@ class ProtoNet(torch.nn.Module):
             n_ways (int): Number of class in a single batch
             k_shot (int): Number of example per class
             embedding_dim (int): dimension of the embedding space
-            prototypes (tensor): Prototype tensor of shape (n_prototypes x embedding_dim),
+            prototypes (tensor): Prototype tensor of shape (n_prototypes x embedding_dim)
             squared (bool): Whether to use the squared Euclidean distance or not
             dist (str): default 'euclidean', other possibility 'cosine'
             normalize (bool): l2 normalization of the features
             device (str): device on which to declare the prototypes (cpu/cuda)
+
+        Returns:
+            -dist (torch.Tensor): A matrix of (batch_size x num_class) size that
+                shows distance between a sample to other classes in the batch.
+            query_labels (torch.Tensor): List of labels for each sample.
         """
         super(ProtoNet, self).__init__()
         self.encoder = encoder
