@@ -20,7 +20,7 @@ class FeatureExtractor:
 
         self.SR = config.params.sr
         self.N_FFT = config.params.n_fft
-        self.HOP = config.params.hop_len
+        self.HOP = config.params.hop_mel
         self.N_MELS = config.params.n_mels
         self.FMAX = config.params.fmax
         self.features_list = config.features

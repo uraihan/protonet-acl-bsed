@@ -4,6 +4,7 @@ import numpy as np
 import h5py
 from . import utils
 from collections import defaultdict
+from tqdm import tqdm
 # import utils  # FOR DEBUGGING ONLY (REMOVE AFTER DONE)
 # from pathlib import Path
 # import os
@@ -14,9 +15,10 @@ class DataSampler:
         self.dataset_path = dataset_path
         self.config = config
         self.sr = config.params.sr
-        self.hop_len = config.params.hop_len
-        self.fps = self.sr / self.hop_len
+        self.hop_mel = config.params.hop_mel
+        self.fps = self.sr / self.hop_mel
         self.seg_len = int(config.params.segment_len * self.fps)
+        self.seg_hop = int(self.seg_len // 2)
         self.feature = feature
         self.is_single = is_single
 
@@ -51,7 +53,7 @@ class DataSampler:
     def map_label_toint(self, label_list):
         unique_label, label_int = np.unique(label_list, return_inverse=True)
 
-        return unique_label, label_int
+        return unique_label.tolist(), label_int.tolist()
 
     # GET START AND END TIME WITH ONSET/OFFSET
     def get_time(self, df):
@@ -66,7 +68,7 @@ class DataSampler:
         return start_time, end_time
 
     # SELECT POSITIVE SEGMENT ON FEATURE ARRAY BASED ON CORRESPONDING METADATA
-    def select_segment(self, start, end, feature, seg_len):
+    def select_segment(self, start, end, feature, seg_len, seg_hop):
         """
         Select positive segment on a feature array based on label annotation.
 
@@ -75,6 +77,7 @@ class DataSampler:
             end: End time of the sample in seconds.
             feature: Feature array of the whole audio file.
             seg_len: Desired sample segment length.
+            seg_hop: Segment hop between each window.
 
         Returns:
             y: Sampled segment in the desired length (configurable in
@@ -103,7 +106,7 @@ class DataSampler:
                 # y = feature[..., randomize: randomize + seg_len]
 
                 y = feature[..., start: start + seg_len]
-                start += seg_len
+                start += seg_hop
                 samples.append(y)
 
         # if y.shape[1] != seg_len:
@@ -121,7 +124,7 @@ class DataSampler:
         # x = []
         # y = []
         dataset = defaultdict()
-        for file in self.csv_files:
+        for file in (pbar := tqdm(self.csv_files, ncols=50)):
             # collecting metadata
             df_pos = self.get_pos_df(file)
             start_time, end_time = self.get_time(df_pos)
@@ -130,12 +133,13 @@ class DataSampler:
 
             # collecting feature array
             feature_path = file.replace("csv", "h5")
-            print(feature_path)
+            pbar.set_postfix_str(feature_path.split("/Development_Set/")[1])
             with h5py.File(feature_path, 'r') as f:
                 for start, end, label in zip(start_time, end_time, label_list):
                     sampled_data = self.select_segment(start, end,
                                                        f[self.feature],
-                                                       self.seg_len)
+                                                       self.seg_len,
+                                                       self.seg_hop)
                     if sampled_data.shape[1] == 15:
                         print(f"Shape 15 on file {feature_path}")
                     # x.append(sampled_data)
@@ -169,17 +173,23 @@ class DataSampler:
                 f"{self.dataset_path}/Training_Set/train_{self.feature}.h5", 'w') as f:
             # print(f"feature shape: {len(x)}, label shape: {len(y)}")
             # print(f"x: {x} \ny: {y}")
+
+            # list approach
             f.create_dataset('feature', data=x)
-            f.create_dataset('label', data=y)
-            f.create_dataset('unique_labels', data=unique_labels)
+            f.create_dataset('labels', data=y)
+            ds = f.create_dataset('unique_labels', shape=len(unique_labels),
+                                  dtype=h5py.string_dtype())
+            ds[:] = unique_labels
+
+            # dictionary approach
             # for label in dataset.keys():
-            #     # TODO: Test the file size of these two options
-            #     # group = f.create_group(label)
-            #     # group.create_dataset('feature', data=dataset[label])
+            # TODO: Test the file size of these two options
+            #     group = f.create_group(label)
+            #     group.create_dataset('feature', data=dataset[label])
             #
             #     # this one is slightly smaller
-            #     f.create_dataset(label, data=dataset[label])
-        print(f"File {f} was successfully created!")
+            # f.create_dataset(label, data=dataset[label])
+            print(f"File {f} was successfully created!")
 
         # with h5py.File(self.dataset_path.replace(".csv", "test2.h5"), 'r') as f:
         #     feat = np.array(f['feature'])

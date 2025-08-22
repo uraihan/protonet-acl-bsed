@@ -1,10 +1,9 @@
-dataset:
-  devset: "dataset/Development_Set"
+dataset: "dataset/Development_Set"
 
 params:
   sr: 22050
   n_fft: 1024
-  hop_len: 256
+  hop_mel: 256
   n_mels: 128
   fmax: 11025
   segment_len: 0.2
