@@ -1,6 +1,6 @@
 from scripts import utils, build_dataset
 from scripts.extract_features import FeatureExtractor
-from data.dataloader import FewShotSampler
+from data.fewshot_sampler import FewShotSampler
 from data.dataset import ProtoDataset
 from pathlib import Path
 from torch.utils.data import DataLoader
@@ -106,12 +106,11 @@ def main():
     unique_labels = np.array(trainset.unique_labels)
     n_ways = config.train_params.n_ways
     k_shots = config.train_params.k_shots
-    trainloader = DataLoader(trainset, batch_sampler=FewShotSampler(labels,
-                                                                    n_ways,
-                                                                    k_shots,
-                                                                    shuffle=True,
-                                                                    include_query=True))
 
+    batch_sampler = FewShotSampler(trainset, n_ways, k_shots, k_shots)
+    trainloader = DataLoader(trainset,
+                             batch_sampler=batch_sampler,
+                             collate_fn=batch_sampler.collate_fn)
     # - Pass batch through resnet model
     model = encoder.ResNet()
     proto_net = protonet.ProtoNet(model, 1, 2096, device="cpu")
@@ -124,11 +123,10 @@ def main():
 
     # check output shape using torchinfo summary
     ex_data = next(iter(trainloader))[0]
-    print(summary(model, ex_data.shape))
+    print(summary(model, ex_data.unsqueeze(1).shape))
 
     epoch = config.train_params.epoch
     current_ep = 1
-
     for ep in range(current_ep, epoch+1):
         fit(proto_net, optimizer, trainloader, loss_fn)
 
