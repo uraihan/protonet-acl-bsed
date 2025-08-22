@@ -24,18 +24,57 @@ class AngularContrastiveLoss(nn.Module):
             ), f"You haven't provided alpha param.\nAlpha: {alpha}"
             self.alpha = alpha
 
-    def forward(self, am_features, projection1=None, projection2=None, labels=None):
+    def forward(self, features, labels, projection1=None, projection2=None):
         if not self.enableCL:
-            return self.amc(self.device, am_features, labels, self.margin)
+            return self.amc(self.device, features, labels, self.margin)
         else:
-            assert (projection1 is not None and projection2 is not None), \
-                "You haven't provided feature projection for calculating the normal Contrastive Loss component."
+            # assert (projection1 is not None and projection2 is not None), \
+            #     "You haven't provided feature projection for calculating the normal Contrastive Loss component."
 
-            loss1 = self.scl(projection1, projection2, labels,
-                             self.temperature, self.device)
-            loss2 = self.amc(self.device, am_features, labels, self.margin)
+            scl_loss = nn.CrossEntropyLoss().to(self.device)
+            loss1 = scl_loss(features, labels)
+            loss2 = self.amc(self.device, features, labels, self.margin)
             return loss1 * self.alpha + (1 - self.alpha) * loss2
 
+    def amc(device, features, labels, margin):
+        if features.shape > 2:
+            features = features.view(features.shape[0], -1)
+        features = F.normalize(features, dim=1)
+        labels = labels.contiguous().view(-1, 1)
+        label_mask = torch.eq(labels, labels.T)
+
+        similarity_matrix = torch.matmul(features, features.T)
+
+        # discard the main diagonal from both: labels and similarities matrix
+        diag_mask = torch.eye(label_mask.shape[0], dtype=torch.bool).to(device)
+        label_mask = label_mask[~diag_mask].view(label_mask.shape[0], -1)
+        similarity_matrix = similarity_matrix[~diag_mask].view(
+            similarity_matrix.shape[0], -1
+        )
+
+        # select and combine multiple positives
+        positives = similarity_matrix[label_mask.bool()]
+
+        # select only the negatives the negatives
+        negatives = similarity_matrix[~label_mask.bool()]
+
+        # if S_ij = 0
+        m = margin
+        negatives = torch.clamp(negatives, min=-1 + 1e-7, max=1 - 1e-7)
+        clip = torch.acos(negatives)
+        l1 = torch.max(torch.zeros(clip.shape[0]).to(device), (m - clip))
+        l1 = torch.sum(l1**2)
+
+        # if S_ij = 1
+        positives = torch.clamp(positives, min=-1 + 1e-7, max=1 - 1e-7)
+        l2 = torch.acos(positives)
+        l2 = torch.sum(l2**2)
+
+        loss = (l1 + l2) / 50
+
+        return loss
+
+    ## LEGACY ##
     def scl(projection1, projection2, labels, temperature, device):
         projection1, projection2 = F.normalize(
             projection1), F.normalize(projection2)
@@ -76,42 +115,5 @@ class AngularContrastiveLoss(nn.Module):
 
         loss = -mean_log_prob_pos
         loss = loss.view(contrast_count, batch_size).mean()
-
-        return loss
-
-    def amc(device, features, labels, margin):
-        features = features.view(features.shape[0], -1)
-        features = F.normalize(features, dim=1)
-        labels = labels.contiguous().view(-1, 1)
-        label_mask = torch.eq(labels, labels.T)
-
-        similarity_matrix = torch.matmul(features, features.T)
-
-        # discard the main diagonal from both: labels and similarities matrix
-        diag_mask = torch.eye(label_mask.shape[0], dtype=torch.bool).to(device)
-        label_mask = label_mask[~diag_mask].view(label_mask.shape[0], -1)
-        similarity_matrix = similarity_matrix[~diag_mask].view(
-            similarity_matrix.shape[0], -1
-        )
-
-        # select and combine multiple positives
-        positives = similarity_matrix[label_mask.bool()]
-
-        # select only the negatives the negatives
-        negatives = similarity_matrix[~label_mask.bool()]
-
-        # if S_ij = 0
-        m = margin
-        negatives = torch.clamp(negatives, min=-1 + 1e-7, max=1 - 1e-7)
-        clip = torch.acos(negatives)
-        l1 = torch.max(torch.zeros(clip.shape[0]).to(device), (m - clip))
-        l1 = torch.sum(l1**2)
-
-        # if S_ij = 1
-        positives = torch.clamp(positives, min=-1 + 1e-7, max=1 - 1e-7)
-        l2 = torch.acos(positives)
-        l2 = torch.sum(l2**2)
-
-        loss = (l1 + l2) / 50
 
         return loss
