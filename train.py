@@ -6,6 +6,7 @@ from pathlib import Path
 from torch.utils.data import DataLoader
 from model import encoder, protonet, loss
 from torchinfo import summary
+from tqdm import tqdm
 import os
 import torch
 import numpy as np
@@ -16,9 +17,8 @@ def check_training_samples(dataset_path):
     if not os.path.exists(dataset_path):
         print(
             "Development dataset folder can not be found\nNow retrieving .zip file from the web")
-        os.system(
-            """wget https://zenodo.org/record/6482837/files/Development_Set.zip
-            -P ./dataset""")
+        os.system(f"""wget https://zenodo.org/record/6482837/files/Development_Set.zip -P {
+                  Path(dataset_path).parent}""")
         os.system(f"cd dataset && unzip {dataset_path}.zip")
 
 
@@ -33,6 +33,7 @@ def get_unextracted_files(dataset_path):
         unextracted_files (list['str'] | list[PosixPath]): List of all
             unextracted files.
     """
+    print("Checking for unprocessed files...")
     csv_files = utils.get_all_csv(dataset_path)
     unextracted_files = []
     for file in csv_files:
@@ -92,16 +93,19 @@ def main():
     unextracted_files = get_unextracted_files(dataset_path)
 
     if len(unextracted_files) != 0:
-        feat_extractor = FeatureExtractor(dataset_path, config,
-                                          unextracted_files)
-        feat_extractor.get_features()
+        print(f"Audio features from {
+              len(unextracted_files)} files have not been extracted. Extracting now...")
+        for file in tqdm(unextracted_files):
+            feat_extractor = FeatureExtractor(file, config)
+            feat_extractor.get_features()
 
-    print("All features were extracted!")
+    print("Audio features from all files have been extracted. \nChecking availability of positive samples")
     # - Sample features based on CSV metadata and bundle them into HDF5 files
     features = config.features
     for feat in features:
         if not os.path.exists(os.path.join(trainset_path,
                               f"train_{feat}.h5")):
+            print("Files for positive samples from training set were not found. Getting positive samples from training set...")
             build_dataset.run(config, dataset_path)
 
     # - Create dataset class from bundled HDF5 file

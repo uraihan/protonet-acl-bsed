@@ -12,11 +12,11 @@ from . import utils
 
 
 class FeatureExtractor:
-    def __init__(self, dataset_path, config, csv_files):
-        # def __init__(self, config):
-        self.dataset_path = dataset_path
+    def __init__(self, filepath, config):
+        # self.dataset_path = dataset_path
+        self.filepath = filepath
         self.config = config
-        self.csv_files = csv_files
+        # self.csv_files = csv_files
 
         self.SR = config.params.sr
         self.N_FFT = config.params.n_fft
@@ -62,64 +62,48 @@ class FeatureExtractor:
 
     def get_features(self):
         """
-        Extract feature from audio file and store it as .h5 files.
-
-        The .h5 files are formatted in such structure:
+        Extract feature from audio file and store it as .h5 files. The .h5 files will be formatted in such structure:
             <feature1>: <data>
             <feature2>: <data>
             ...
             <featureN>: <data>
+
+        Returns: None
         """
 
-        # print("Checking availability of the development dataset in current local folder")
-        # if not os.path.exists(self.dataset_path):
-        #     print(
-        #         "Development dataset folder can not be found\nNow retrieving .zip file from the web")
-        #     os.system(
-        #         "wget https://zenodo.org/record/6482837/files/Development_Set.zip?download=1")
-        #     os.system(f"unzip {self.dataset_path}")
+        save_path = self.filepath.replace(".csv", ".h5")
+        audio_path = self.filepath.replace(".csv", ".wav")
+        # if os.path.exists(save_path):
+        #     continue
+        # else:
+        try:
+            result = {}
 
-        # training_data = [f for f in glob.glob(
-        #     f"{self.dataset_path}/Training_Set/*/*.wav")]
-        # print("Collecting all CSV files")
-        # training_data = utils.get_all_csv(self.dataset_path)
+            result['waveform'] = self.get_waveform(audio_path)
+            result['melspec'] = self.get_melspec(result['waveform'])
+            result['logmel'] = self.get_logmel(result['melspec'])
+            result['pcen'] = self.get_pcen(result['waveform'])
 
-        print("Extracting features from training data...")
-        for file in self.csv_files:
-            save_path = file.replace(".csv", ".h5")
-            audio_path = file.replace(".csv", ".wav")
-            # if os.path.exists(save_path):
-            #     continue
-            # else:
-            try:
-                result = {}
+            save_file = h5py.File(save_path, 'w')
+            for feat in result.keys():
+                save_file.create_dataset(feat, data=result[feat])
 
-                result['waveform'] = self.get_waveform(audio_path)
-                result['melspec'] = self.get_melspec(result['waveform'])
-                result['logmel'] = self.get_logmel(result['melspec'])
-                result['pcen'] = self.get_pcen(result['waveform'])
+            save_file.close()
 
-                save_file = h5py.File(save_path, 'w')
+            # Test
+            with h5py.File(save_path, 'r') as f:
                 for feat in result.keys():
-                    save_file.create_dataset(feat, data=result[feat])
+                    assert (f[feat].dtype == result[feat].dtype)
 
-                save_file.close()
+            print(f"File {audio_path} is successfully processed!")
+            gc.collect()
 
-                # Test
-                with h5py.File(save_path, 'r') as f:
-                    for feat in result.keys():
-                        assert (f[feat].dtype == result[feat].dtype)
-
-                print(f"File {audio_path} is successfully processed!")
-                gc.collect()
-
-                # for feat in result.keys():
-                #     np_path = file.replace(".wav", f"_{feat}.npy")
-                #     np.save(np_path, feat)
-                #     print(f"File {np_path} is successfully created!")
-            except Exception as e:
-                print(f"Encountered error in {audio_path}. Error: {e}")
-                continue
+            # for feat in result.keys():
+            #     np_path = file.replace(".wav", f"_{feat}.npy")
+            #     np.save(np_path, feat)
+            #     print(f"File {np_path} is successfully created!")
+        except Exception as e:
+            print(f"Encountered error in {audio_path}. Error: {e}")
 
 
 # def get_features(dataset_path, config):
