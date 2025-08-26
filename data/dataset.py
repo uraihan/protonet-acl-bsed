@@ -20,9 +20,10 @@ class ProtoDataset(Dataset):
 
         assert (feature in ["pcen", "melspec", "logmel"],
                 "Invalid feature. Must be either 'pcen', 'melspec', or 'logmel'")
+        self.dataset_path = dataset_path
         self.feature = feature
-        self.train_set = os.path.join(dataset_path,
-                                      f"train_{feature}.h5")
+        self.train_set = os.path.join(self.dataset_path,
+                                      f"{feature}.h5")
         self.unique_labels, self.labels = self.get_labels()
         self.unique_labels = [label.decode() for label in self.unique_labels]
 
