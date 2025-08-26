@@ -12,6 +12,15 @@ from tqdm import tqdm
 
 class DataSampler:
     def __init__(self, dataset_path, config, feature, is_single=False):
+        """
+        Params:
+            dataset_path: Path to dataset
+            config: Config object
+            feature: Feature to be used for dataset sampling
+            is_single: This is mainly for debugging purpose. Default
+            value is False. If you want to test the data sampler only
+            on one file, pass True.
+        """
         self.dataset_path = dataset_path
         self.config = config
         self.sr = config.params.sr
@@ -58,7 +67,6 @@ class DataSampler:
     # GET START AND END TIME WITH ONSET/OFFSET
     def get_time(self, df):
         # 25ms margin around onset and offset
-        # TODO: ask why
         df.loc[:, "Starttime"] = df["Starttime"] - 0.025
         df.loc[:, "Endtime"] = df["Endtime"] + 0.025
 
@@ -170,7 +178,7 @@ class DataSampler:
         # y = np.array(y, dtype="str_")
         unique_labels, y = self.map_label_toint(y)
         with h5py.File(
-                f"{self.dataset_path}/Training_Set/train_{self.feature}.h5", 'w') as f:
+                f"{self.dataset_path}/{self.feature}.h5", 'w') as f:
             # print(f"feature shape: {len(x)}, label shape: {len(y)}")
             # print(f"x: {x} \ny: {y}")
 

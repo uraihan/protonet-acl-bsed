@@ -1,4 +1,5 @@
-from scripts import utils, build_dataset
+from scripts import utils
+from scripts.build_dataset import DataSampler
 from scripts.extract_features import FeatureExtractor
 from data.fewshot_sampler import FewShotSampler
 from data.dataset import ProtoDataset
@@ -42,6 +43,17 @@ def get_unextracted_files(dataset_path):
             unextracted_files.append(file)
 
     return unextracted_files
+
+
+def collect_positive_set(config, dataset_path):
+    features = config.features
+    for feat in features:
+        h5_file = f"{feat}.h5"
+        if not os.path.exists(os.path.join(dataset_path, h5_file)):
+            print(
+                "Cannot find {h5_file} in {Path(dataset_path).stem}. Collecting positive samples for feature {feat}...")
+            data_sampler = DataSampler(dataset_path, config, feat)
+            data_sampler.sample_data()
 
 
 def fit(protonet, optimizer, trainloader, loss_fn):
@@ -101,12 +113,6 @@ def main():
 
     print("Audio features from all files have been extracted. \nChecking availability of positive samples")
     # - Sample features based on CSV metadata and bundle them into HDF5 files
-    features = config.features
-    for feat in features:
-        if not os.path.exists(os.path.join(trainset_path,
-                              f"train_{feat}.h5")):
-            print("Files for positive samples from training set were not found. Getting positive samples from training set...")
-            build_dataset.run(config, dataset_path)
 
     # - Create dataset class from bundled HDF5 file
     trainset = ProtoDataset(trainset_path, 'melspec', config)
