@@ -25,11 +25,13 @@ class AngularContrastiveLoss(nn.Module):
             self.alpha = alpha
 
     def forward(self, features, labels, projection1=None, projection2=None):
+        # consider removing projection1 and projection2 from input
+        # params
         if len(features.shape) >= 3:
             features = features.squeeze(1)
 
         if not self.enableCL:
-            return self.amc(self.device, features, labels, self.margin)
+            return self.amc(features, labels, self.margin)
         else:
             # assert (projection1 is not None and projection2 is not None), \
             #     "You haven't provided feature projection for calculating the normal Contrastive Loss component."
@@ -37,6 +39,7 @@ class AngularContrastiveLoss(nn.Module):
             batch_size = features.size(0)
             n_ways = features.size(1)
             k_shot = int(batch_size / n_ways)
+            # think of other solutions for this onehot labeling
             onehot_labels = torch.eye(
                 n_ways, n_ways).repeat_interleave(k_shot, dim=0).to(self.device)
 

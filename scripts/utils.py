@@ -70,7 +70,7 @@ def get_all_csv(dataset_path):
         csv_files: List of paths to CSV metadata files.
     """
     try:
-        dataset_path = os.path.join(dataset_path, "Training_Set/*/*.csv")
+        dataset_path = os.path.join(dataset_path, "*/*/*.csv")
         # return [f for f in glob.glob(f"{dataset_path}/Training_Set/*/*.csv")]
         return [f for f in glob.glob(dataset_path)]
     except Exception as e:
