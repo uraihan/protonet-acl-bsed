@@ -93,7 +93,7 @@ class ResNet(nn.Module):
         x = self.layer1(data)
         x = self.layer2(x)
         x = self.layer3(x)
-        x = self.adaptive_avg_pool(x)
+        x = self.adaptive_avg_pool(x)  # think whether we need this
 
         # TODO: decide which one is the most appropriate out of these two return
         # return x.view(x.size(0), -1)

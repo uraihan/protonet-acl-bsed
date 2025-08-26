@@ -67,7 +67,10 @@ class ProtoNet(torch.nn.Module):
 
         prototypes = self.get_prototypes(sup_embedding)
 
+        # Three approaches that is worth looking into
         dist = torch.cdist(query_embedding, prototypes)
+        # dist = (query_embedding - prototypes).pow(2).sum(1).sqrt()
+        # dist = self.get_distance(query_embedding, prototypes)
 
         return -dist, query_labels
 
@@ -77,6 +80,9 @@ class ProtoNet(torch.nn.Module):
         return prototypes
 
     def get_distance(self, query, prototypes):
+        """
+        Euclidean distance calculation from Snell's paper.
+        """
         if (len(query.shape) >= 3) and (query.size(1) == 1):
             query.squeeze(1)
 
