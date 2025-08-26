@@ -183,7 +183,7 @@ class DataSampler:
             # print(f"x: {x} \ny: {y}")
 
             # list approach
-            f.create_dataset('feature', data=x)
+            f.create_dataset('features', data=x)
             f.create_dataset('labels', data=y)
             ds = f.create_dataset('unique_labels', shape=len(unique_labels),
                                   dtype=h5py.string_dtype())
